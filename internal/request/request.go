@@ -2,6 +2,7 @@ package request
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -31,6 +32,8 @@ type Params struct {
 	QueryParams  QueryParams
 	BasicAuth    *BasicAuth
 	HandleErrors *bool
+	Context      context.Context
+	Client       *http.Client // Cliente HTTP opcional para reuso de conexão
 }
 
 // BasicAuth Usuário e senha usados na autenticação por BasicAuth
@@ -86,13 +89,17 @@ func New(params Params) (*Response, error) {
 	var request *http.Request
 	var err error
 
-	// Instanciando a requisição para depois o cliente pode executa-la.
-	// Caso a requisição possua body então passamos a variavel do body, caso contrario passamos nil.
-	// Não podemos passar a variavel body quando ela é nil porque se não da erro interno do GO por causa dos nils tipados e nils não tipados.
-	if body == nil {
-		request, err = http.NewRequest(params.Method, params.URL, nil)
+	// Se body == nil então passamos http.NoBody como reader.
+	var requestBody io.Reader = http.NoBody
+
+	if body != nil {
+		requestBody = body
+	}
+
+	if params.Context != nil {
+		request, err = http.NewRequestWithContext(params.Context, params.Method, params.URL, requestBody)
 	} else {
-		request, err = http.NewRequest(params.Method, params.URL, body)
+		request, err = http.NewRequest(params.Method, params.URL, requestBody)
 	}
 
 	if err != nil {
@@ -117,15 +124,21 @@ func New(params Params) (*Response, error) {
 	}
 
 	// Instanciando o client que ira executar a requsição.
-	client := &http.Client{}
+	client := params.Client
+	if client == nil {
+		// Se nenhum cliente foi fornecido, cria um novo
+		client = &http.Client{}
+	}
 
 	// Verificando se algum timeout foi passado por parametro, caso não tenha sido passado então setamos 40 por padrão.
 	if params.Timeout == 0 {
 		params.Timeout = DefaultRequestTimeoutSeconds
 	}
 
-	// Setando o timeout no client.
-	client.Timeout = time.Duration(params.Timeout) * time.Second
+	// Setando o timeout no client (apenas se for um cliente novo).
+	if params.Client == nil {
+		client.Timeout = time.Duration(params.Timeout) * time.Second
+	}
 
 	// Executando a requisição.
 	res, err := client.Do(request)
@@ -250,8 +263,6 @@ func toString(v any) string {
 		} else {
 			return fmt.Sprintf("%v", rv.Elem())
 		}
-
 	}
-
 	return fmt.Sprintf("%v", rv)
 }

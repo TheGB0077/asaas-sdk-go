@@ -1,5 +1,12 @@
 package asaas
 
+import (
+	"errors"
+	"fmt"
+
+	"github.com/govalues/decimal"
+)
+
 // Constantes type-safe para BillingType (Tipo de Cobrança)
 type BillingType string
 
@@ -96,6 +103,11 @@ type ListCustomerResponse struct {
 	Data       []CustomerResponse `json:"data"`       // Dados dos clientes encontrados para os filtros
 }
 
+type DeleteCustomerResponse struct {
+	Deleted bool   `json:"deleted"` // Se o Cliente foi excluído
+	Id      string `json:"id"`      // ID do Cliente excluído
+}
+
 // BillingRequest é a struct usada para a criação de uma nova Cobrança na API Asaas
 type BillingRequest struct {
 	Customer string `json:"customer"` // Obrigatório - ID do cliente gerado na API Asaas
@@ -104,45 +116,45 @@ type BillingRequest struct {
 	//  * BillingTypeBoleto ("BOLETO")
 	//  * BillingTypeCreditCard ("CREDIT_CARD")
 	//  * BillingTypePix ("PIX")
-	BillingType                                BillingType   `json:"billingType"`
-	Value                                      float64  `json:"value"`                                      // Obrigatório - Valor da cobrança
-	DueDate                                    string   `json:"dueDate"`                                    // Obrigatório - Data de vencimento da cobrança - Formato: yyyy-mm-dd
-	Description                                *string  `json:"description"`                                // Descrição da cobrança (máx. 500 caracteres)
-	DaysAfterDueDateToRegistrationCancellation *int     `json:"daysAfterDueDateToRegistrationCancellation"` // Dias após o vencimento para cancelamento do registro (somente para boleto bancário)
-	ExternalReference                          *string  `json:"externalReference"`                          // Campo livre para busca
-	InstallmentCount                           *int     `json:"installmentCount"`                           // Número de parcelas (somente no caso de cobrança parcelada)
-	TotalValue                                 *float64 `json:"totalValue"`                                 // Informe o valor total de uma cobrança que será parcelada (somente no caso de cobrança parcelada). Caso enviado este campo o installmentValue não é necessário, o cálculo por parcela será automático
-	InstallmentValue                           *float64 `json:"installmentValue"`                           // Valor de cada parcela (somente no caso de cobrança parcelada). Envie este campo em caso de querer definir o valor de cada parcela
-	PostalService                              *bool    `json:"postalService"`                              // Define se a cobrança será enviada via Correios
+	BillingType                                BillingType      `json:"billingType"`
+	Value                                      decimal.Decimal  `json:"value"`                                      // Obrigatório - Valor da cobrança
+	DueDate                                    string           `json:"dueDate"`                                    // Obrigatório - Data de vencimento da cobrança - Formato: yyyy-mm-dd
+	Description                                *string          `json:"description"`                                // Descrição da cobrança (máx. 500 caracteres)
+	DaysAfterDueDateToRegistrationCancellation *int             `json:"daysAfterDueDateToRegistrationCancellation"` // Dias após o vencimento para cancelamento do registro (somente para boleto bancário)
+	ExternalReference                          *string          `json:"externalReference"`                          // Campo livre para busca
+	InstallmentCount                           *int             `json:"installmentCount"`                           // Número de parcelas (somente no caso de cobrança parcelada)
+	TotalValue                                 *decimal.Decimal `json:"totalValue"`                                 // Informe o valor total de uma cobrança que será parcelada (somente no caso de cobrança parcelada). Caso enviado este campo o installmentValue não é necessário, o cálculo por parcela será automático
+	InstallmentValue                           *decimal.Decimal `json:"installmentValue"`                           // Valor de cada parcela (somente no caso de cobrança parcelada). Envie este campo em caso de querer definir o valor de cada parcela
+	PostalService                              *bool            `json:"postalService"`                              // Define se a cobrança será enviada via Correios
 }
 
 // BillingResponse é a struct usada para receber os dados da criação de uma nova Cobrança na API Asaas
 type BillingResponse struct {
-	Object      string  `json:"object"`      // Tipo de recurso sendo criado
-	Id          string  `json:"id"`          // ID da cobrança na API Asaas
-	Customer    string  `json:"customer"`    // ID do cliente gerado na API Asaas
-	DateCreated string  `json:"dateCreated"` // Data de criação da cobrança - Formato: yyyy-mm-dd
-	Value       float64 `json:"value"`       // Valor da cobrança
+	Object      string          `json:"object"`      // Tipo de recurso sendo criado
+	Id          string          `json:"id"`          // ID da cobrança na API Asaas
+	Customer    string          `json:"customer"`    // ID do cliente gerado na API Asaas
+	DateCreated string          `json:"dateCreated"` // Data de criação da cobrança - Formato: yyyy-mm-dd
+	Value       decimal.Decimal `json:"value"`       // Valor da cobrança
 	// Obrigatório - Forma de pagamento:
 	//  * BillingTypeUndefined ("UNDEFINED")
 	//  * BillingTypeBoleto ("BOLETO")
 	//  * BillingTypeCreditCard ("CREDIT_CARD")
 	//  * BillingTypePix ("PIX")
-	BillingType           BillingType     `json:"billingType"`
-	CanBePaidAfterDueDate bool       `json:"canBePaidAfterDueDate"` // Informa se a cobrança pode ser paga após a data de vencimento
-	CreditCard            CreditCard `json:"creditCard"`            // Informações do cartão de crédito usado no pagamento
-	PixTransaction        string     `json:"pixTransaction"`        // ID da transação do PIX no caso de pagamento via PIX
-	TransactionReceiptUrl string     `json:"transactionReceiptUrl"` // URL do recibo da transação
-	PaymentDate           string     `json:"paymentDate"`           // Data em que o dinheiro irá cair na conta do asaas (no caso de cartão pode ser 30d) - Formato: yyyy-mm-dd
-	ClientPaymentDate     string     `json:"clientPaymentDate"`     // Data em que o cliente efetuou o pagamento da cobrança - Formato: yyyy-mm-dd
-	Status                string     `json:"status"`                // Situação da cobrança
-	DueDate               string     `json:"dueDate"`               // Data de vencimento da cobrança - Formato: yyyy-mm-dd
-	InvoiceUrl            string     `json:"invoiceUrl"`            // URL da cobrança, onde pode ser baixado o PDF / obtida a linha digitável / obtido o código do Boleto PIX
-	InvoiceNumber         string     `json:"invoiceNumber"`         // Número da cobrança
-	Deleted               bool       `json:"deleted"`               // Se a Cobrança foi excluída na base de dados da API Asaas
-	NossoNumero           string     `json:"nossoNumero"`           // Campo "Nosso Número" do boleto
-	BankSlipUrl           string     `json:"bankSlipUrl"`           // URL do boleto da cobrança
-	PostalService         bool       `json:"postalService"`         // Informa se a cobrança foi enviada por e-mail
+	BillingType           BillingType `json:"billingType"`
+	CanBePaidAfterDueDate bool        `json:"canBePaidAfterDueDate"` // Informa se a cobrança pode ser paga após a data de vencimento
+	CreditCard            CreditCard  `json:"creditCard"`            // Informações do cartão de crédito usado no pagamento
+	PixTransaction        string      `json:"pixTransaction"`        // ID da transação do PIX no caso de pagamento via PIX
+	TransactionReceiptUrl string      `json:"transactionReceiptUrl"` // URL do recibo da transação
+	PaymentDate           string      `json:"paymentDate"`           // Data em que o dinheiro irá cair na conta do asaas (no caso de cartão pode ser 30d) - Formato: yyyy-mm-dd
+	ClientPaymentDate     string      `json:"clientPaymentDate"`     // Data em que o cliente efetuou o pagamento da cobrança - Formato: yyyy-mm-dd
+	Status                string      `json:"status"`                // Situação da cobrança
+	DueDate               string      `json:"dueDate"`               // Data de vencimento da cobrança - Formato: yyyy-mm-dd
+	InvoiceUrl            string      `json:"invoiceUrl"`            // URL da cobrança, onde pode ser baixado o PDF / obtida a linha digitável / obtido o código do Boleto PIX
+	InvoiceNumber         string      `json:"invoiceNumber"`         // Número da cobrança
+	Deleted               bool        `json:"deleted"`               // Se a Cobrança foi excluída na base de dados da API Asaas
+	NossoNumero           string      `json:"nossoNumero"`           // Campo "Nosso Número" do boleto
+	BankSlipUrl           string      `json:"bankSlipUrl"`           // URL do boleto da cobrança
+	PostalService         bool        `json:"postalService"`         // Informa se a cobrança foi enviada por e-mail
 }
 
 type CreditCard struct {
@@ -163,9 +175,9 @@ type SubscriptionRequest struct {
 	//  * BillingTypeBoleto ("BOLETO")
 	//  * BillingTypeCreditCard ("CREDIT_CARD")
 	//  * BillingTypePix ("PIX")
-	BillingType BillingType  `json:"billingType"`
-	Value       float64 `json:"value"`       // Obrigatório - Valor da assinatura
-	NextDueDate string  `json:"nextDueDate"` // Obrigatório - Vencimento da primeira cobrança
+	BillingType BillingType     `json:"billingType"`
+	Value       decimal.Decimal `json:"value"`       // Obrigatório - Valor da assinatura
+	NextDueDate string          `json:"nextDueDate"` // Obrigatório - Vencimento da primeira cobrança
 	// Obrigatório - Periodicidade da cobrança:
 	//  * CycleTypeWeekly ("WEEKLY")
 	//  * CycleTypeBiweekly ("BIWEEKLY")
@@ -174,11 +186,11 @@ type SubscriptionRequest struct {
 	//  * CycleTypeQuarterly ("QUARTERLY")
 	//  * CycleTypeSemiannually ("SEMIANNUALLY")
 	//  * CycleTypeYearly ("YEARLY")
-	Cycle             CycleType  `json:"cycle"`
-	Description       *string `json:"description"`       // Descrição da assinatura (máx. 500 caracteres)
-	EndDate           *string `json:"endDate"`           // Data limite para vencimento das cobranças
-	MaxPayments       *int    `json:"maxPayments"`       // Número máximo de cobranças a serem geradas para esta assinatura
-	ExternalReference *string `json:"externalReference"` // Identificador do sistema integrado ao Asaas
+	Cycle             CycleType `json:"cycle"`
+	Description       *string   `json:"description"`       // Descrição da assinatura (máx. 500 caracteres)
+	EndDate           *string   `json:"endDate"`           // Data limite para vencimento das cobranças
+	MaxPayments       *int      `json:"maxPayments"`       // Número máximo de cobranças a serem geradas para esta assinatura
+	ExternalReference *string   `json:"externalReference"` // Identificador do sistema integrado ao Asaas
 }
 
 // SubscriptionResponse é a struct usada para receber os dados da criação de uma nova assinatura na API Asaas
@@ -202,19 +214,19 @@ type SubscriptionResponse struct {
 	//  * CycleTypeQuarterly ("QUARTERLY")
 	//  * CycleTypeSemiannually ("SEMIANNUALLY")
 	//  * CycleTypeYearly ("YEARLY")
-	Cycle       CycleType  `json:"cycle"`
-	Value       float64 `json:"value"`       // Valor da assinatura
-	NextDueDate string  `json:"nextDueDate"` // Vencimento do próximo pagamento a ser gerado
-	EndDate     string  `json:"endDate"`     // Data limite para vencimento das cobranças
-	Description string  `json:"description"` // Descrição da assinatura (máx. 500 caracteres)
+	Cycle       CycleType       `json:"cycle"`
+	Value       decimal.Decimal `json:"value"`       // Valor da assinatura
+	NextDueDate string          `json:"nextDueDate"` // Vencimento do próximo pagamento a ser gerado
+	EndDate     string          `json:"endDate"`     // Data limite para vencimento das cobranças
+	Description string          `json:"description"` // Descrição da assinatura (máx. 500 caracteres)
 	// Status da assinatura
 	//  * SubscriptionStatusActive ("ACTIVE")
 	//  * SubscriptionStatusExpired ("EXPIRED")
 	//  * SubscriptionStatusInactive ("INACTIVE")
 	Status            SubscriptionStatus `json:"status"`
-	Deleted           bool   `json:"deleted"`           // Se a Assinatura foi excluído na base de dados da API Asaas
-	MaxPayments       int    `json:"maxPayments"`       // Número máximo de cobranças a serem geradas para esta assinatura
-	ExternalReference string `json:"externalReference"` // Identificador do sistema integrado ao Asaas
+	Deleted           bool               `json:"deleted"`           // Se a Assinatura foi excluído na base de dados da API Asaas
+	MaxPayments       int                `json:"maxPayments"`       // Número máximo de cobranças a serem geradas para esta assinatura
+	ExternalReference string             `json:"externalReference"` // Identificador do sistema integrado ao Asaas
 }
 
 type ListSubscriptionResponse struct {
@@ -236,6 +248,40 @@ type ListBillingResponse struct {
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+// APIError representa um erro da API Asaas
+type APIError struct {
+	StatusCode int
+	ErrorCode  string
+	Message    string
+	RequestID  string
+	Err        error
+}
+
+// Error implementa a interface error
+func (e *APIError) Error() string {
+	return fmt.Sprintf("Asaas API error (status %d, code %s): %s", e.StatusCode, e.ErrorCode, e.Message)
+}
+
+// Unwrap permite que errors.As e errors.Is funcionem com este erro
+func (e *APIError) Unwrap() error {
+	return e.Err
+}
+
+// AsAPIError permite verificar se um erro é do tipo APIError usando errors.As
+func AsAPIError(err error) (*APIError, bool) {
+	var apiErr *APIError
+	if errors.As(err, &apiErr) {
+		return apiErr, true
+	}
+	return nil, false
+}
+
+// IsAPIError verifica se um erro é do tipo APIError
+func IsAPIError(err error) bool {
+	_, ok := AsAPIError(err)
+	return ok
+}
 
 // ErrorResponse é a struct que é usada para receber os retornos de erro do Asaas
 type ErrorResponse struct {
